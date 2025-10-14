@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useEffect } from 'react';
 import type { Agent, Message, Project, AgentRole } from './types';
 import { MessageSender } from './types';
@@ -13,23 +14,77 @@ import AddAgentModal from './components/AddAgentModal';
 
 const App: React.FC = () => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [projects, setProjects] = useState<Project[]>(PROJECTS);
-  const [currentProject, setCurrentProject] = useState<Project | null>(projects[0] || null);
+  
+  const [projects, setProjects] = useState<Project[]>(() => {
+    try {
+      const savedProjects = localStorage.getItem('metisium_projects');
+      return savedProjects ? JSON.parse(savedProjects) : PROJECTS;
+    } catch (error) {
+      console.error('Could not load projects from localStorage', error);
+      return PROJECTS;
+    }
+  });
+
+  const [pastChats, setPastChats] = useState<{ id: string; title: string }[]>(() => {
+    try {
+      const saved = localStorage.getItem('metisium_past_chats');
+      return saved ? JSON.parse(saved) : PAST_CHATS;
+    } catch (error) {
+      console.error('Could not load past chats from localStorage', error);
+      return PAST_CHATS;
+    }
+  });
+
+  const [chatHistories, setChatHistories] = useState<Record<string, Message[]>>(() => {
+    try {
+      const saved = localStorage.getItem('metisium_chat_histories');
+      return saved ? JSON.parse(saved) : MOCK_CHAT_HISTORY;
+    } catch (error) {
+      console.error('Could not load chat histories from localStorage', error);
+      return MOCK_CHAT_HISTORY;
+    }
+  });
+
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('metisium_projects', JSON.stringify(projects));
+    } catch (error) {
+      console.error('Could not save projects to localStorage', error);
+    }
+  }, [projects]);
+  
+  useEffect(() => {
+    try {
+      localStorage.setItem('metisium_past_chats', JSON.stringify(pastChats));
+    } catch (error) {
+      console.error('Could not save past chats to localStorage', error);
+    }
+  }, [pastChats]);
+  
+  useEffect(() => {
+    try {
+      localStorage.setItem('metisium_chat_histories', JSON.stringify(chatHistories));
+    } catch (error) {
+      console.error('Could not save chat histories to localStorage', error);
+    }
+  }, [chatHistories]);
+
+  const [currentProject, setCurrentProject] = useState<Project | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [isResponding, setIsResponding] = useState(false);
   const [showProjectSettings, setShowProjectSettings] = useState(false);
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
   const [showAddAgentModal, setShowAddAgentModal] = useState(false);
-  const [pastChats, setPastChats] = useState(PAST_CHATS);
-  const [chatHistories, setChatHistories] = useState<Record<string, Message[]>>(MOCK_CHAT_HISTORY);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [chatToShare, setChatToShare] = useState<{id: string, title: string} | null>(null);
   const [chatToRename, setChatToRename] = useState<{id: string, title: string} | null>(null);
+  const [selectedAgents, setSelectedAgents] = useState<Agent[]>([]);
 
-  const updateChatHistory = (chatId: string, message: Message) => {
+  const updateChatHistory = (conversationId: string, message: Message) => {
     setChatHistories(prev => ({
       ...prev,
-      [chatId]: [...(prev[chatId] || []), message]
+      [conversationId]: [...(prev[conversationId] || []), message]
     }));
   };
 
@@ -38,17 +93,24 @@ const App: React.FC = () => {
     
     const projectAgents = currentProject ? AGENTS.filter(agent => currentProject.roles.some(r => r.agentId === agent.id)) : AGENTS;
 
-    let currentChatId = activeChatId;
+    let conversationId: string;
 
-    // If this is the first message of a new chat, create it
-    if (!currentChatId) {
+    if (currentProject) {
+      // We are in a project context. The conversation ID is the project's ID.
+      // We do NOT create a new chat in the sidebar.
+      conversationId = currentProject.id;
+    } else if (activeChatId) {
+      // We are in an existing chat.
+      conversationId = activeChatId;
+    } else {
+      // This is the first message of a new chat. Create it.
       const newChatId = `chat-${Date.now()}`;
       const newChatTitle = text.length > 35 ? text.substring(0, 32) + '...' : text;
       const newChat = { id: newChatId, title: newChatTitle };
       
       setPastChats(prev => [newChat, ...prev]);
       setActiveChatId(newChatId);
-      currentChatId = newChatId;
+      conversationId = newChatId;
     }
 
     const userMessage: Message = {
@@ -60,18 +122,16 @@ const App: React.FC = () => {
     };
     
     setMessages(prev => [...prev, userMessage]);
-    updateChatHistory(currentChatId, userMessage);
+    updateChatHistory(conversationId, userMessage);
     setIsResponding(true);
 
     const agentsToRespond = selectedAgentIds.length > 0
       ? projectAgents.filter(a => selectedAgentIds.includes(a.id))
       : projectAgents.filter(a => text.toLowerCase().includes(a.name.toLowerCase())).length > 0
       ? projectAgents.filter(a => text.toLowerCase().includes(a.name.toLowerCase()))
-      : currentProject ? [] : [projectAgents[0]];
+      : projectAgents;
     
-    if (agentsToRespond.length === 0 && currentProject) {
-       // In a project, if no one is mentioned, maybe don't respond or have a default behavior?
-       // For now, we just stop.
+    if (agentsToRespond.length === 0) {
        setIsResponding(false);
        return;
     }
@@ -104,7 +164,7 @@ const App: React.FC = () => {
           } else {
             clearInterval(streamInterval);
             const finalMessage = { ...agentMessage, text: mockResponse };
-            updateChatHistory(currentChatId!, finalMessage);
+            updateChatHistory(conversationId, finalMessage);
             if (index === agentsToRespond.length - 1) {
               setIsResponding(false);
             }
@@ -119,14 +179,16 @@ const App: React.FC = () => {
     setMessages([]);
     setActiveChatId(null);
     setCurrentProject(null);
+    setSelectedAgents([]);
   };
   
   const handleSelectChat = (chatId: string) => {
     setMessages(chatHistories[chatId] || []);
     setActiveChatId(chatId);
     setCurrentProject(null); // Deselect project when a past chat is opened
+    setSelectedAgents([]);
   };
-  
+
   const handleRenameChat = (chatId: string, newTitle: string) => {
     setPastChats(prev => prev.map(chat => chat.id === chatId ? { ...chat, title: newTitle } : chat));
     setChatToRename(null);
@@ -143,8 +205,9 @@ const App: React.FC = () => {
     const project = projects.find(p => p.id === projectId);
     if (project) {
       setCurrentProject(project);
-      setMessages([]);
+      setMessages(chatHistories[projectId] || []);
       setActiveChatId(null);
+      setSelectedAgents([]);
     }
   };
 
@@ -206,6 +269,7 @@ const App: React.FC = () => {
         onNewChat={handleNewChat}
         onShowNewProjectModal={() => setShowNewProjectModal(true)}
         projects={projects}
+        agents={AGENTS}
         currentProjectId={currentProject?.id || ''}
         onProjectSelect={handleProjectSelect}
         pastChats={pastChats}
@@ -220,7 +284,7 @@ const App: React.FC = () => {
             messages={messages}
             getAgentById={getAgentById}
             isResponding={isResponding}
-            welcomeQuote={messages.length === 0 && !currentProject ? WELCOME_QUOTE : undefined}
+            welcomeQuote={messages.length === 0 && !currentProject && !activeChatId ? WELCOME_QUOTE : undefined}
             currentProject={currentProject}
             onShowProjectSettings={() => setShowProjectSettings(true)}
           />
@@ -233,6 +297,8 @@ const App: React.FC = () => {
               availableAgents={agentsInCurrentProject}
               isProjectContext={!!currentProject}
               onShowAddAgentModal={() => setShowAddAgentModal(true)}
+              selectedAgents={selectedAgents}
+              onSelectedAgentsChange={setSelectedAgents}
            />
         </div>
       </main>

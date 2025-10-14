@@ -10,11 +10,16 @@ interface PromptInputProps {
   availableAgents: Agent[];
   isProjectContext: boolean;
   onShowAddAgentModal: () => void;
+  selectedAgents: Agent[];
+  onSelectedAgentsChange: (agents: Agent[]) => void;
 }
 
-const PromptInput: React.FC<PromptInputProps> = ({ onSendMessage, isResponding, availableAgents, isProjectContext, onShowAddAgentModal }) => {
+const PromptInput: React.FC<PromptInputProps> = ({ 
+  onSendMessage, isResponding, availableAgents, 
+  isProjectContext, onShowAddAgentModal,
+  selectedAgents, onSelectedAgentsChange
+}) => {
   const [text, setText] = useState('');
-  const [selectedAgents, setSelectedAgents] = useState<Agent[]>([]);
   const [showAtMentions, setShowAtMentions] = useState(false);
   const [mentionQuery, setMentionQuery] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -46,7 +51,7 @@ const PromptInput: React.FC<PromptInputProps> = ({ onSendMessage, isResponding, 
       setText(newText);
       
       if (agent.id !== 'everyone' && !selectedAgents.some(a => a.id === agent.id)) {
-          setSelectedAgents([...selectedAgents, agent]);
+          onSelectedAgentsChange([...selectedAgents, agent]);
       }
 
       setShowAtMentions(false);
@@ -69,7 +74,7 @@ const PromptInput: React.FC<PromptInputProps> = ({ onSendMessage, isResponding, 
       
       onSendMessage(text, finalAgentIds);
       setText('');
-      setSelectedAgents([]);
+      onSelectedAgentsChange([]);
     }
   };
 
@@ -88,7 +93,7 @@ const PromptInput: React.FC<PromptInputProps> = ({ onSendMessage, isResponding, 
                 <span>Add Agent</span>
               </button>
             ) : (
-              <AgentSelector allAgents={availableAgents} selectedAgents={selectedAgents} onSelectionChange={setSelectedAgents} />
+              <AgentSelector allAgents={availableAgents} selectedAgents={selectedAgents} onSelectionChange={onSelectedAgentsChange} />
             )}
              <button type="button" onClick={() => document.getElementById('file-upload')?.click()} className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">
                 <UploadIcon />

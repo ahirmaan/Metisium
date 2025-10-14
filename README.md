@@ -1,55 +1,20 @@
-# Metisium – Multi-Agent AI Workspace (Prototype)
+<div align="center">
+<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+</div>
 
-**Metisium** is an ambitious platform designed to **redefine how multiple AI agents collaborate** to help users accomplish complex tasks in a single workspace. This repository hosts a **fully interactive no-code prototype**, showcasing the vision, features, and UI of Metisium, without connecting to live AI APIs yet.
+# Run and deploy your AI Studio app
 
----
+This contains everything you need to run your app locally.
 
-## Vision
-Metisium empowers users to create **projects**, assign **specific roles to AI agents**, and interact with multiple AI models simultaneously—**like managing a professional team**, but entirely powered by AI. Each agent contributes uniquely based on its assigned role, enabling advanced collaboration across tasks such as:
+View your app in AI Studio: https://ai.studio/apps/drive/1u5M6jsN0VILYtgiB2vZAMlD9_8XsOiuA
 
-- Content generation  
-- Image creation  
-- Data analysis  
-- Multi-agent task workflows
+## Run Locally
 
----
+**Prerequisites:**  Node.js
 
-## Prototype Highlights
-- **Modern Chat LLM UI:** Inspired by **ChatGPT, Claude, Gemini, and Grok**, featuring a professional, clean, dark-themed interface.  
-- **Project-Based Workflows:** Users can create projects, assign roles to agents, and manage tasks collaboratively.  
-- **Multi-Agent Interaction:**  
-  - Type `@` to see **available agent suggestions**, similar to Slack or Snapchat tagging.  
-  - Tag a specific agent or use `@everyone` to interact with multiple agents.  
-  - Only one AI responds at a time; subsequent agents wait for user input before replying.  
-- **Prompt Enhancements:**  
-  - Built-in **spelling and grammar correction** for user prompts.  
-  - Supports **dynamic prompt assignment** across different agents.  
-- **Interactive Sidebar:**  
-  - Create **new chats**  
-  - Search existing chats  
-  - Access and manage **projects**  
-  - Assign roles to agents per project  
-- **Mock AI Responses:** All agent responses are **pre-filled** in this prototype to simulate real interactions.
 
----
-
-## Important Notes
-- This is a **no-code prototype**, intended to **demonstrate features and UI/UX**.  
-- AI models are **not live**—responses are **mock data**.  
-- No chat history or persistent backend integration exists yet.  
-- Designed for **concept validation**, feedback, and early-stage demonstrations.  
-
----
-
-## Next Steps
-- Integrate **real AI APIs** (e.g., OpenAI, Gemini, Claude).  
-- Implement **project-based agent workflows** with backend logic.  
-- Store **chat history and AI responses** for long-term interactions.  
-- Expand **multi-agent collaboration rules** for more complex task execution.  
-
----
-
-## Getting Started
-1. Clone this repository:  
-   ```bash
-   git clone https://github.com/ahirmaan/metisium-prototype.git
+1. Install dependencies:
+   `npm install`
+2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+3. Run the app:
+   `npm run dev`

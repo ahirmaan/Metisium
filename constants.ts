@@ -1,11 +1,12 @@
+
 import type { Agent, Project, Message } from './types';
 import { MessageSender } from './types';
 
 export const AGENTS: Agent[] = [
-  { id: 'gemini', name: 'Gemini', avatar: 'https://i.imgur.com/e5k2m2I.png' },
-  { id: 'claude', name: 'Claude', avatar: 'https://i.imgur.com/gDCGk8v.png' },
-  { id: 'chatgpt', name: 'ChatGPT', avatar: 'https://i.imgur.com/6VB2ey4.png' },
-  { id: 'grok', name: 'Grok', avatar: 'https://i.imgur.com/bWtRqJM.png' },
+  { id: 'gemini', name: 'Gemini', avatar: 'https://i.imgur.com/6cFLcUV.png' },
+  { id: 'claude', name: 'Claude', avatar: 'https://i.imgur.com/4lQQH8w.png' },
+  { id: 'chatgpt', name: 'ChatGPT', avatar: 'https://i.imgur.com/EKtV2DR.png' },
+  { id: 'grok', name: 'Grok', avatar: 'https://i.imgur.com/jV51C3L.png' },
 ];
 
 export const PROJECTS: Project[] = [
