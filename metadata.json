@@ -1,0 +1,5 @@
+{
+  "name": "Metisium: AI Collaboration Platform",
+  "description": "A multi-agent AI workspace where users can create projects, assign roles to AI agents (like ChatGPT, Gemini, Claude), and interact with them individually or simultaneously. This platform redefines multi-agent workflows by enabling humans to coordinate multiple AIs in a single, unified environment.",
+  "requestFramePermissions": []
+}
