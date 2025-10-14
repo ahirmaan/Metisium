@@ -4,7 +4,7 @@
 
 ---
 
-## 🚀 Vision
+## Vision
 Metisium empowers users to create **projects**, assign **specific roles to AI agents**, and interact with multiple AI models simultaneously—**like managing a professional team**, but entirely powered by AI. Each agent contributes uniquely based on its assigned role, enabling advanced collaboration across tasks such as:
 
 - Content generation  
@@ -14,7 +14,7 @@ Metisium empowers users to create **projects**, assign **specific roles to AI ag
 
 ---
 
-## 🎨 Prototype Highlights
+## Prototype Highlights
 - **Modern Chat LLM UI:** Inspired by **ChatGPT, Claude, Gemini, and Grok**, featuring a professional, clean, dark-themed interface.  
 - **Project-Based Workflows:** Users can create projects, assign roles to agents, and manage tasks collaboratively.  
 - **Multi-Agent Interaction:**  
@@ -33,7 +33,7 @@ Metisium empowers users to create **projects**, assign **specific roles to AI ag
 
 ---
 
-## ⚠️ Important Notes
+## Important Notes
 - This is a **no-code prototype**, intended to **demonstrate features and UI/UX**.  
 - AI models are **not live**—responses are **mock data**.  
 - No chat history or persistent backend integration exists yet.  
@@ -41,7 +41,7 @@ Metisium empowers users to create **projects**, assign **specific roles to AI ag
 
 ---
 
-## 🎯 Next Steps
+## Next Steps
 - Integrate **real AI APIs** (e.g., OpenAI, Gemini, Claude).  
 - Implement **project-based agent workflows** with backend logic.  
 - Store **chat history and AI responses** for long-term interactions.  
@@ -49,7 +49,7 @@ Metisium empowers users to create **projects**, assign **specific roles to AI ag
 
 ---
 
-## 📂 Getting Started
+## Getting Started
 1. Clone this repository:  
    ```bash
    git clone https://github.com/ahirmaan/metisium-prototype.git
