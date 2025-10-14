@@ -52,4 +52,4 @@ Metisium empowers users to create **projects**, assign **specific roles to AI ag
 ## 📂 Getting Started
 1. Clone this repository:  
    ```bash
-   git clone https://github.com/ahirrmaan/metisium-prototype.git
+   git clone https://github.com/ahirmaan/metisium-prototype.git
