@@ -1,10 +1,68 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import type { Message, Agent, Project, SubChat } from '../types';
 import { MessageSender } from '../types';
-import { SettingsIcon, SparklesIcon } from './icons/Icons';
+import { SettingsIcon, SparklesIcon, PencilIcon } from './icons/Icons';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+
+interface MessageEditorProps {
+    message: Message;
+    onSave: (messageId: string, newText: string) => void;
+    onCancel: () => void;
+}
+
+const MessageEditor: React.FC<MessageEditorProps> = ({ message, onSave, onCancel }) => {
+    const [text, setText] = useState(message.text);
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
+  
+    useEffect(() => {
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+        textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+        textareaRef.current.focus();
+        textareaRef.current.select();
+      }
+    }, []);
+  
+    const handleSave = () => {
+      if (text.trim() && text.trim() !== message.text) {
+        onSave(message.id, text.trim());
+      } else {
+        onCancel();
+      }
+    };
+  
+    return (
+      <div className="flex flex-col gap-2">
+        <textarea
+          ref={textareaRef}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              handleSave();
+            }
+            if (e.key === 'Escape') {
+              onCancel();
+            }
+          }}
+          className="bg-transparent w-full resize-none outline-none text-base text-white placeholder-gray-300"
+          rows={1}
+        />
+        <div className="flex justify-end gap-2">
+          <button onClick={onCancel} className="px-3 py-1 text-xs font-semibold rounded-md bg-gray-600 hover:bg-gray-500 text-white">
+            Cancel
+          </button>
+          <button onClick={handleSave} className="px-3 py-1 text-xs font-semibold rounded-md bg-indigo-500 hover:bg-indigo-400 text-white">
+            Save & Submit
+          </button>
+        </div>
+      </div>
+    );
+  };
+  
 
 interface ChatViewProps {
   messages: Message[];
@@ -14,6 +72,9 @@ interface ChatViewProps {
   currentProject: Project | null;
   activeSubChat: SubChat | null;
   onShowProjectSettings: () => void;
+  editingMessageId: string | null;
+  onSetEditingMessageId: (id: string | null) => void;
+  onEditMessage: (messageId: string, newText: string) => void;
 }
 
 const ChatView: React.FC<ChatViewProps> = ({
@@ -23,7 +84,10 @@ const ChatView: React.FC<ChatViewProps> = ({
   welcomeQuote,
   currentProject,
   activeSubChat,
-  onShowProjectSettings
+  onShowProjectSettings,
+  editingMessageId,
+  onSetEditingMessageId,
+  onEditMessage
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -102,13 +166,35 @@ const ChatView: React.FC<ChatViewProps> = ({
         const isUser = message.sender === MessageSender.USER;
         const isLastMessage = index === messages.length - 1;
         const agentMessageIsStreaming = isLastMessage && isResponding && !isUser;
+        const isEditing = editingMessageId === message.id;
 
         return (
           <div key={message.id} className={`flex items-start gap-3 max-w-[720px] mx-auto ${isUser ? 'flex-row-reverse' : ''}`}>
-            <div className={`p-3 rounded-2xl max-w-xl prose prose-sm dark:prose-invert max-w-none prose-p:my-0 prose-pre:my-2 prose-pre:bg-transparent ${isUser ? 'bg-indigo-500 text-white prose-p:text-white prose-strong:text-white' : 'bg-gray-200 dark:bg-gray-700'}`}>
+            <div className={`relative group p-3 rounded-2xl max-w-xl prose prose-sm dark:prose-invert max-w-none prose-p:my-0 prose-pre:my-2 prose-pre:bg-transparent ${isUser ? 'bg-indigo-500 text-white prose-p:text-white prose-strong:text-white' : 'bg-gray-200 dark:bg-gray-700'}`}>
               {!isUser && agent && <p className="font-bold text-xs mb-1 not-prose">{agent.name}</p>}
-              <ReactMarkdown components={MarkdownComponents}>{message.text}</ReactMarkdown>
-              {agentMessageIsStreaming && <span className="inline-block w-1.5 h-4 bg-current ml-1 animate-pulse" />}
+              
+              {isEditing ? (
+                <MessageEditor 
+                    message={message} 
+                    onSave={onEditMessage}
+                    onCancel={() => onSetEditingMessageId(null)}
+                />
+              ) : (
+                <>
+                    <ReactMarkdown components={MarkdownComponents}>{message.text}</ReactMarkdown>
+                    {agentMessageIsStreaming && <span className="inline-block w-1.5 h-4 bg-current ml-1 animate-pulse" />}
+                </>
+              )}
+
+              {isUser && !isEditing && !isResponding && (
+                <button
+                    onClick={() => onSetEditingMessageId(message.id)}
+                    className="absolute -bottom-3 left-1/2 -translate-x-1/2 p-1 rounded-full bg-white dark:bg-gray-600 border border-gray-200 dark:border-gray-500 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
+                    aria-label="Edit message"
+                >
+                    <PencilIcon className="w-3 h-3 text-gray-600 dark:text-gray-300" />
+                </button>
+              )}
             </div>
           </div>
         );

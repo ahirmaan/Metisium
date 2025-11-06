@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import type { Agent, Message, Project, AgentRole, SubChat } from './types';
 import { MessageSender } from './types';
@@ -81,51 +81,35 @@ const App: React.FC = () => {
   const [showAddAgentModal, setShowAddAgentModal] = useState(false);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [chatToRename, setChatToRename] = useState<{id: string, title: string} | null>(null);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
 
-  const updateChatHistory = (conversationId: string, message: Message) => {
+  const generationIdRef = useRef(0);
+  const activeStreamIntervals = useRef<ReturnType<typeof setInterval>[]>([]);
+
+  const handleStopGeneration = () => {
+    generationIdRef.current++; // Invalidate current generation
+    activeStreamIntervals.current.forEach(clearInterval);
+    activeStreamIntervals.current = [];
+    setIsResponding(false);
+    // If there's a loading placeholder from an edit, remove it
+    setMessages(prev => prev.filter(m => !m.id.startsWith('msg-loading-')));
+  };
+  
+  const updateChatHistory = (conversationId: string, updatedHistory: Message[]) => {
     setChatHistories(prev => ({
       ...prev,
-      [conversationId]: [...(prev[conversationId] || []), message]
+      [conversationId]: updatedHistory
     }));
   };
 
-  const handleSendMessage = useCallback(async (text: string) => {
-    if (!text.trim() || isResponding) return;
-    
-    let conversationId: string | null = null;
+  const generateResponses = useCallback(async (text: string, conversationId: string, currentHistory: Message[] = []) => {
+    const currentGenerationId = ++generationIdRef.current;
+    setIsResponding(true);
 
-    if (activeSubChat) {
-      conversationId = activeSubChat.id;
-    } else if (activeChatId) {
-      conversationId = activeChatId;
-    } else {
-      const newChatId = `chat-${Date.now()}`;
-      const newChatTitle = text.length > 35 ? text.substring(0, 32) + '...' : text;
-      const newChat = { id: newChatId, title: newChatTitle };
-      
-      setPastChats(prev => [newChat, ...prev]);
-      setActiveChatId(newChatId);
-      conversationId = newChatId;
-    }
-
-    if (!conversationId) return;
-
-    const userMessage: Message = {
-      id: `msg-${Date.now()}`,
-      text,
-      sender: MessageSender.USER,
-      senderId: 'user',
-      timestamp: new Date().toISOString(),
-    };
-    
-    setMessages(prev => [...prev, userMessage]);
-    updateChatHistory(conversationId, userMessage);
-    
     const mentionedAgentNames = text.match(/@(\w+)/g)?.map(m => m.substring(1).toLowerCase()) || [];
     const isCombinedRequest = mentionedAgentNames.length === 0;
 
     if (isCombinedRequest) {
-      setIsResponding(true);
       const orchestratorMessage: Message = {
         id: `msg-${Date.now()}-metisium`,
         text: '',
@@ -142,10 +126,8 @@ const App: React.FC = () => {
             return `- ${agent.name}: ${roleInfo ? roleInfo.role : 'A general purpose AI assistant.'}`;
         }).join('\n');
 
-        // FIX: The user query should not be part of the system instruction; it should be passed in `contents`.
         const systemInstruction = `You are Metisium, an AI orchestrator. Your task is to provide a single, synthesized response to the user's query by considering the perspectives and specializations of the following AI agents:\n\n${agentRoles}\n\nBased on the agents' roles, generate a comprehensive, cohesive response that synthesizes their likely contributions. Do not list what each agent would say. Instead, provide a single, unified answer as the orchestrator.`;
         
-        // FIX: `contents` should be a simple string for a single user prompt.
         const responseStream = await ai.models.generateContentStream({
             model: 'gemini-2.5-flash',
             contents: text,
@@ -154,70 +136,168 @@ const App: React.FC = () => {
 
         let combinedText = '';
         for await (const chunk of responseStream) {
+            if (generationIdRef.current !== currentGenerationId) break;
             combinedText += chunk.text;
             setMessages(prev => prev.map(m => m.id === orchestratorMessage.id ? { ...m, text: combinedText } : m));
         }
-        const finalMessage = { ...orchestratorMessage, text: combinedText };
-        updateChatHistory(conversationId, finalMessage);
+
+        if (generationIdRef.current === currentGenerationId) {
+            const finalMessage = { ...orchestratorMessage, text: combinedText };
+            updateChatHistory(conversationId, [...currentHistory, finalMessage]);
+        }
 
       } catch(e) {
           console.error(e);
-          const errorMessage: Message = {
-              ...orchestratorMessage,
-              text: "Sorry, I encountered an error trying to generate a combined response.",
-          };
-          setMessages(prev => prev.map(m => m.id === orchestratorMessage.id ? errorMessage : m));
-          updateChatHistory(conversationId, errorMessage);
+          if (generationIdRef.current === currentGenerationId) {
+            const errorMessage = { ...orchestratorMessage, text: "Sorry, I encountered an error trying to generate a combined response." };
+            setMessages(prev => prev.map(m => m.id === orchestratorMessage.id ? errorMessage : m));
+            updateChatHistory(conversationId, [...currentHistory, errorMessage]);
+          }
       } finally {
-          setIsResponding(false);
+          if (generationIdRef.current === currentGenerationId) {
+              setIsResponding(false);
+          }
       }
     } else {
-        setIsResponding(true);
         const agentsInContext = currentProject ? AGENTS.filter(a => currentProject.roles.some(r => r.agentId === a.id)) : AGENTS;
-        const agentsToRespond = agentsInContext.filter(agent => mentionedAgentNames.includes(agent.name.toLowerCase()));
-        
+        let agentsToRespond: Agent[];
+        if (mentionedAgentNames.includes('everyone')) {
+            agentsToRespond = agentsInContext;
+        } else {
+            agentsToRespond = agentsInContext.filter(agent => mentionedAgentNames.includes(agent.name.toLowerCase()));
+        }
+
         if (agentsToRespond.length === 0) {
           setIsResponding(false);
           return;
         }
-
+        
+        activeStreamIntervals.current = [];
         let responseDelay = 1000;
-        agentsToRespond.forEach((agent, index) => {
-          setTimeout(() => {
-            const projectRole = currentProject?.roles.find(r => r.agentId === agent.id);
-            const roleText = projectRole ? projectRole.role : 'default';
-            const mockResponse = MOCK_RESPONSES[agent.id]?.[roleText] || MOCK_RESPONSES[agent.id]?.default || "I'm not sure how to respond to that.";
+        const newAgentMessages: Message[] = [];
 
-            const agentMessage: Message = {
-              id: `msg-${Date.now()}-${agent.id}`,
-              text: '',
-              sender: MessageSender.AGENT,
-              senderId: agent.id,
-              timestamp: new Date().toISOString(),
-            };
+        const streamPromises = agentsToRespond.map((agent) => {
+          return new Promise<void>((resolve) => {
+            setTimeout(() => {
+              if (generationIdRef.current !== currentGenerationId) return resolve();
+              
+              const projectRole = currentProject?.roles.find(r => r.agentId === agent.id);
+              const roleText = projectRole ? projectRole.role : 'default';
+              const mockResponse = MOCK_RESPONSES[agent.id]?.[roleText] || MOCK_RESPONSES[agent.id]?.default || "I'm not sure how to respond to that.";
 
-            setMessages(prev => [...prev, agentMessage]);
-            
-            let charIndex = 0;
-            const streamInterval = setInterval(() => {
-              if (charIndex < mockResponse.length) {
-                const streamedText = mockResponse.substring(0, charIndex + 1);
-                setMessages(prev => prev.map(m => m.id === agentMessage.id ? { ...m, text: streamedText } : m));
-                charIndex++;
-              } else {
-                clearInterval(streamInterval);
-                const finalMessage = { ...agentMessage, text: mockResponse };
-                updateChatHistory(conversationId as string, finalMessage);
-                if (index === agentsToRespond.length - 1) {
-                  setIsResponding(false);
+              const agentMessage: Message = {
+                id: `msg-${Date.now()}-${agent.id}`,
+                text: '',
+                sender: MessageSender.AGENT,
+                senderId: agent.id,
+                timestamp: new Date().toISOString(),
+              };
+              
+              newAgentMessages.push(agentMessage);
+              setMessages(prev => [...prev, agentMessage]);
+              
+              let charIndex = 0;
+              const streamInterval = setInterval(() => {
+                if (generationIdRef.current !== currentGenerationId) {
+                  clearInterval(streamInterval);
+                  return resolve();
                 }
-              }
-            }, 30);
-          }, responseDelay);
-          responseDelay += 500;
+
+                if (charIndex < mockResponse.length) {
+                  const streamedText = mockResponse.substring(0, charIndex + 1);
+                  setMessages(prev => prev.map(m => m.id === agentMessage.id ? { ...m, text: streamedText } : m));
+                  charIndex++;
+                } else {
+                  clearInterval(streamInterval);
+                  const finalMessage = { ...agentMessage, text: mockResponse };
+                  const agentMsgIndex = newAgentMessages.findIndex(m => m.id === agentMessage.id);
+                  if (agentMsgIndex > -1) newAgentMessages[agentMsgIndex] = finalMessage;
+                  resolve();
+                }
+              }, 30);
+              activeStreamIntervals.current.push(streamInterval);
+            }, responseDelay);
+            responseDelay += 500;
+          });
         });
+
+        await Promise.all(streamPromises);
+
+        if (generationIdRef.current === currentGenerationId) {
+            updateChatHistory(conversationId, [...currentHistory, ...newAgentMessages]);
+            setIsResponding(false);
+        }
     }
-  }, [isResponding, currentProject, activeChatId, activeSubChat, chatHistories]);
+  }, [currentProject]);
+
+  const handleSendMessage = useCallback(async (text: string) => {
+    if (!text.trim() || isResponding) return;
+    
+    let conversationId: string | null = null;
+    let historyForGeneration: Message[] = [];
+
+    if (activeSubChat) {
+      conversationId = activeSubChat.id;
+    } else if (activeChatId) {
+      conversationId = activeChatId;
+    } else {
+      const newChatId = `chat-${Date.now()}`;
+      const newChatTitle = text.length > 35 ? text.substring(0, 32) + '...' : text;
+      const newChat = { id: newChatId, title: newChatTitle };
+      setPastChats(prev => [newChat, ...prev]);
+      setActiveChatId(newChatId);
+      conversationId = newChatId;
+    }
+
+    if (!conversationId) return;
+
+    const userMessage: Message = {
+      id: `msg-${Date.now()}`,
+      text,
+      sender: MessageSender.USER,
+      senderId: 'user',
+      timestamp: new Date().toISOString(),
+    };
+    
+    historyForGeneration = [...(chatHistories[conversationId] || []), userMessage];
+    setMessages(prev => [...prev, userMessage]);
+    updateChatHistory(conversationId, historyForGeneration);
+    
+    await generateResponses(text, conversationId, historyForGeneration);
+
+  }, [isResponding, currentProject, activeChatId, activeSubChat, chatHistories, generateResponses]);
+  
+  const handleEditMessage = useCallback(async (messageId: string, newText: string) => {
+    setEditingMessageId(null);
+    const conversationId = activeSubChat?.id || activeChatId;
+    if (!conversationId) return;
+  
+    const history = chatHistories[conversationId] || [];
+    const messageIndex = history.findIndex(m => m.id === messageId);
+    if (messageIndex === -1) return;
+  
+    let responseEndIndex = messageIndex;
+    while (
+      responseEndIndex + 1 < history.length &&
+      history[responseEndIndex + 1].sender === MessageSender.AGENT
+    ) {
+      responseEndIndex++;
+    }
+  
+    const updatedUserMessage = { ...history[messageIndex], text: newText };
+  
+    const historyBefore = history.slice(0, messageIndex);
+    const historyAfter = history.slice(responseEndIndex + 1);
+  
+    const updatedHistory = [...historyBefore, updatedUserMessage, ...historyAfter];
+    
+    setMessages(updatedHistory);
+    updateChatHistory(conversationId, updatedHistory);
+  
+    // Now regenerate responses
+    await generateResponses(newText, conversationId, updatedHistory);
+  
+  }, [activeSubChat, activeChatId, chatHistories, generateResponses]);
 
   const handleNewChat = () => {
     setMessages([]);
@@ -242,11 +322,9 @@ const App: React.FC = () => {
     const project = projects.find(p => p.id === projectId);
     if (project) {
         setCurrentProject(project);
-        // Select the first sub-chat by default
         if (project.subChats.length > 0) {
             handleSelectSubChat(project.id, project.subChats[0].id);
         } else {
-            // No sub-chats, clear messages
             setActiveSubChat(null);
             setMessages([]);
         }
@@ -273,7 +351,7 @@ const App: React.FC = () => {
       name: projectName,
       roles: selectedAgentIds.map(agentId => ({
         agentId,
-        role: `You are a helpful assistant.` // Default role
+        role: `You are a helpful assistant.`
       })),
       subChats: [{ id: `${newProjectId}-sc-1`, title: 'General' }]
     };
@@ -347,6 +425,9 @@ const App: React.FC = () => {
             currentProject={currentProject}
             activeSubChat={activeSubChat}
             onShowProjectSettings={() => setShowProjectSettings(true)}
+            editingMessageId={editingMessageId}
+            onSetEditingMessageId={setEditingMessageId}
+            onEditMessage={handleEditMessage}
           />
           <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-white dark:from-[#212121] to-transparent pointer-events-none"></div>
         </div>
@@ -357,6 +438,7 @@ const App: React.FC = () => {
               availableAgents={agentsInCurrentProject}
               isProjectContext={!!currentProject}
               onShowAddAgentModal={() => setShowAddAgentModal(true)}
+              onStopGeneration={handleStopGeneration}
            />
         </div>
       </main>

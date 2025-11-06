@@ -148,16 +148,25 @@ const Sidebar: React.FC<SidebarProps> = ({
           </button>
         </div>
 
-        <div className="flex-1 px-2 space-y-4 overflow-y-auto">
+        <div className="flex-1 px-2 space-y-2 overflow-y-auto">
           <section>
             <button 
-              className={`w-full flex items-center px-2 text-xs font-bold uppercase text-gray-500 dark:text-gray-400 my-2 ${isCollapsed ? 'justify-center' : 'justify-between'}`}
               onClick={() => !isCollapsed && setIsProjectsVisible(v => !v)}
+              className={`w-full flex items-center p-2 rounded-lg ${
+                  isCollapsed 
+                  ? 'justify-center text-gray-500 dark:text-gray-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 hover:text-indigo-600 dark:hover:text-indigo-400' 
+                  : 'justify-between text-xs font-bold uppercase text-gray-500 dark:text-gray-400'
+              }`}
             >
-              <span>{isCollapsed ? <ProjectsIcon className="mx-auto" /> : 'Projects'}</span>
-              {!isCollapsed && <ChevronDownIcon className={`w-4 h-4 transition-transform ${isProjectsVisible ? '' : '-rotate-90'}`} />}
+              {isCollapsed ? 
+                  <ProjectsIcon /> :
+                  <>
+                      <span>Projects</span>
+                      <ChevronDownIcon className={`w-4 h-4 transition-transform ${isProjectsVisible ? '' : '-rotate-90'}`} />
+                  </>
+              }
             </button>
-            {(isCollapsed || isProjectsVisible) && (
+            {(!isCollapsed && isProjectsVisible) && (
               <div className="space-y-1">
                 {filteredProjects.map(project => (
                   <div key={project.id}>
@@ -185,13 +194,22 @@ const Sidebar: React.FC<SidebarProps> = ({
 
           <section>
             <button 
-                className={`w-full flex items-center px-2 text-xs font-bold uppercase text-gray-500 dark:text-gray-400 my-2 ${isCollapsed ? 'justify-center' : 'justify-between'}`}
                 onClick={() => !isCollapsed && setIsPastChatsVisible(v => !v)}
+                className={`w-full flex items-center p-2 rounded-lg ${
+                  isCollapsed 
+                  ? 'justify-center text-gray-500 dark:text-gray-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 hover:text-indigo-600 dark:hover:text-indigo-400' 
+                  : 'justify-between text-xs font-bold uppercase text-gray-500 dark:text-gray-400'
+              }`}
             >
-                <span>{isCollapsed ? <ChatIcon className="mx-auto" /> : 'Past Chats'}</span>
-                {!isCollapsed && <ChevronDownIcon className={`w-4 h-4 transition-transform ${isPastChatsVisible ? '' : '-rotate-90'}`} />}
+              {isCollapsed ?
+                  <ChatIcon /> :
+                  <>
+                      <span>Past Chats</span>
+                      <ChevronDownIcon className={`w-4 h-4 transition-transform ${isPastChatsVisible ? '' : '-rotate-90'}`} />
+                  </>
+              }
             </button>
-            {(isCollapsed || isPastChatsVisible) && (
+            {(!isCollapsed && isPastChatsVisible) && (
               <div className="space-y-1">
                 {filteredPastChats.map(chat => (
                   <div key={chat.id} className="group relative">
